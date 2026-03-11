@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Enterprise Dashboard</title>
+    <style>
+        body { font-family: sans-serif; background: #f4f4f9; padding: 20px; }
+        .card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Arquitectura de Microservicios</h1>
+    
+    <div class="card">
+        <h3>1. Autenticación</h3>
+        <p>Para probar, obtén un token de Keycloak:</p>
+        <button onclick="window.location.href='/auth/'">Ir a Keycloak</button>
+    </div>
+
+    <div class="card">
+        <h3>2. Servicios</h3>
+        <button onclick="fetchData('/api/users/')">Consultar Usuarios</button>
+        <button onclick="fetchData('/api/products/')">Consultar Productos</button>
+    </div>
+
+    <div class="card">
+        <h3>Resultado API:</h3>
+        <pre id="output">Presiona un botón para ver la respuesta...</pre>
+    </div>
+
+    <script>
+        async function fetchData(url) {
+            const out = document.getElementById('output');
+            out.innerText = "Cargando...";
+            try {
+                // Aquí deberías incluir el Header: Authorization: Bearer <TOKEN>
+                const res = await fetch(url);
+                const data = await res.json();
+                out.innerText = JSON.stringify(data, null, 2);
+            } catch (err) {
+                out.innerText = "Error: Asegúrate de estar autenticado o que el servicio esté arriba.";
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,152 @@
+version: '3.8'
+
+services:
+  # -------------------------------------
+  # API GATEWAY (NGINX)
+  # -------------------------------------
+  api_gateway:
+    image: nginx:alpine
+    container_name: api_gateway
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - nginx_cache:/var/cache/nginx
+    networks:
+      - enterprise_network
+    depends_on:
+      - user_service
+      - product_service
+      - keycloak
+
+  # -------------------------------------
+  # IDENTITY & ACCESS MANAGEMENT
+  # -------------------------------------
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: keycloak
+    command: 
+      - start-dev
+      - --import-realm
+    environment:
+      KC_DB: dev-file
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: "true"
+    volumes:
+      - ./realm-export.json:/opt/keycloak/data/import/realm.json:ro
+    ports:
+      - "8080:8080"
+    networks:
+      - enterprise_network
+
+  # -------------------------------------
+  # CACHÉ (Redis para JWT Introspection)
+  # -------------------------------------
+  redis_cache:
+    image: redis:alpine
+    container_name: redis_cache
+    command: redis-server --maxmemory 2gb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - enterprise_network
+    deploy:
+      resources:
+        reservations:
+          memory: 512M
+
+  # -------------------------------------
+  # MICROSERVICIOS (FastAPI)
+  # -------------------------------------
+  user_service:
+    build: ./user_service  # Asume que tienes un Dockerfile aquí
+    container_name: user_service
+    # No exponemos puertos al host, Nginx maneja el tráfico
+    expose:
+      - "8001"
+    environment:
+      - DATABASE_URL=postgresql://user:pass@db_users:5432/users_db
+      - REDIS_URL=redis://redis_cache:6379/0
+      - KEYCLOAK_URL=http://keycloak:8080/realms/master
+    networks:
+      - enterprise_network
+    depends_on:
+      - db_users
+      - redis_cache
+
+  product_service:
+    build: ./product_service # Asume que tienes un Dockerfile aquí
+    container_name: product_service
+    expose:
+      - "8002"
+    environment:
+      - DATABASE_URL=postgresql://user:pass@db_products:5432/products_db
+      - REDIS_URL=redis://redis_cache:6379/0
+      - KEYCLOAK_URL=http://keycloak:8080/realms/master
+    networks:
+      - enterprise_network
+    depends_on:
+      - db_products
+      - redis_cache
+
+  # -------------------------------------
+  # BASES DE DATOS (Database-per-Service)
+  # -------------------------------------
+  db_users:
+    image: postgres:15-alpine
+    container_name: db_users
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: users_db
+    volumes:
+      - pg_users_data:/var/lib/postgresql/data
+    networks:
+      - enterprise_network
+    deploy:
+      resources:
+        reservations:
+          memory: 2G
+
+  db_products:
+    image: postgres:15-alpine
+    container_name: db_products
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: products_db
+    volumes:
+      - pg_products_data:/var/lib/postgresql/data
+    networks:
+      - enterprise_network
+    deploy:
+      resources:
+        reservations:
+          memory: 2G
+
+
+  #-------------------------------------
+  # Frontend
+  #-------------------------------------
+  frontend:
+    image: nginx:alpine
+    container_name: frontend_ui
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+    networks:
+      - enterprise_network
+
+
+  #-------------------------------------
+  # VOLÚMENES Y REDES
+  #-------------------------------------
+networks:
+  enterprise_network:
+    driver: bridge
+
+volumes:
+  pg_users_data:
+  pg_products_data:
+  redis_data:
+  nginx_cache:
